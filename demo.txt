@@ -1,0 +1,237 @@
+/*
+ * Copyright (c) 2015 seeed technology inc.
+ * Website    : www.seeed.cc
+ * Author     : Wuruibin
+ * Modified Time: June 2015
+ * Description: This demo can recognize 9 gestures and output the result, including move up, move down, move left, move right,
+ * 				move forward, move backward, circle-clockwise, circle-counter clockwise, and wave.
+ * 
+ * The MIT License (MIT)
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+#include <Wire.h>
+#include "paj7620.h"
+
+#include <Servo.h> 
+
+#define DEBUG 0
+
+/* 
+Notice: When you want to recognize the Forward/Backward gestures, your gestures' reaction time must less than GES_ENTRY_TIME(0.8s). 
+        You also can adjust the reaction time according to the actual circumstance.
+*/
+#define GES_REACTION_TIME		500				// You can adjust the reaction time according to the actual circumstance.
+#define GES_ENTRY_TIME			800				// When you want to recognize the Forward/Backward gestures, your gestures' reaction time must less than GES_ENTRY_TIME(0.8s). 
+#define GES_QUIT_TIME			1000
+
+Servo myservo;  // create servo object to control a servo 
+                // twelve servo objects can be created on most boards
+int pos = 0;    // variable to store the servo position 
+
+void setup()
+{
+	uint8_t error = 0;
+
+	Serial.begin(9600);
+	
+	myservo.attach(9);  // attaches the servo on pin 9 to the servo object 
+	
+#if DEBUG
+	Serial.println("\nPAJ7620U2 TEST DEMO: Recognize 9 gestures.");
+#endif
+
+	error = paj7620Init();			// initialize Paj7620 registers
+	if (error) 
+	{
+		Serial.print("INIT ERROR,CODE:");
+		Serial.println(error);
+	}
+	else
+	{
+		Serial.println("INIT OK");
+	}
+#if DEBUG
+	Serial.println("Please input your gestures:\n");
+#endif
+}
+
+void loop()
+{
+	uint8_t data = 0, data1 = 0, error;
+	
+	myservo.write(0);
+	
+//	int ram = freeRam();
+//	Serial.print("RAM: ");
+//	Serial.println(ram);
+	
+	error = paj7620ReadReg(0x43, 1, &data);				// Read Bank_0_Reg_0x43/0x44 for gesture result.
+	if (!error) 
+	{
+		switch (data) 									// When different gestures be detected, the variable 'data' will be set to different values by paj7620ReadReg(0x43, 1, &data).
+		{
+			case GES_RIGHT_FLAG:
+					Serial.println("Right");
+					if( pos <= 100) // goes from 0 degrees to 180 degrees 
+					{                                  // in steps of 1 degree 
+						pos = pos + 50;
+						Serial.println(pos);
+						myservo.write(pos);              // tell servo to go to position in variable 'pos' 
+						delay(1000);                       // waits 15ms for the servo to reach the position 
+					} 
+					else
+					{
+						myservo.write(150); 
+						Serial.println("no");
+					}
+				          
+				break;
+			case GES_LEFT_FLAG: 
+					Serial.println("Left");
+					if( pos >= 50) // goes from 0 degrees to 180 degrees 
+					{                                  // in steps of 1 degree 
+						pos = pos - 50;
+						Serial.println(pos);
+						myservo.write(pos);              // tell servo to go to position in variable 'pos' 
+						delay(1000);                       // waits 15ms for the servo to reach the position 
+					} 
+					else
+					{
+						myservo.write(0);
+						Serial.println("no");
+					} 
+				
+				break;
+			case GES_UP_FLAG:
+					Serial.println("Up");
+					for(pos = 0; pos <= 150; pos += 25) // goes from 0 degrees to 180 degrees 
+					{                                  // in steps of 1 degree 
+						myservo.write(pos);              // tell servo to go to position in variable 'pos' 
+						delay(1000);                       // waits 15ms for the servo to reach the position 
+						paj7620ReadReg(0x43, 1, &data);
+						if(data == GES_FORWARD_FLAG) 
+						{
+							Serial.println("Forward");
+							break;
+						}
+						if(pos >= 150)
+						{
+							break;
+						}
+					}
+				          
+				break;
+			case GES_DOWN_FLAG:
+					Serial.println("Down");
+					for(pos = 150; pos>=0; pos-=25)     // goes from 180 degrees to 0 degrees 
+					{                                
+						myservo.write(pos);              // tell servo to go to position in variable 'pos' 
+						delay(1000);                       // waits 15ms for the servo to reach the position 
+						paj7620ReadReg(0x43, 1, &data);
+						if(data == GES_FORWARD_FLAG) 
+						{
+							Serial.println("Forward");
+							break;
+						}
+						if(pos <= 0)
+						{
+							break;
+						}
+					} 
+				         
+				break;
+			case GES_FORWARD_FLAG:
+				Serial.println("Forward");
+				myservo.write(pos); 
+				delay(GES_QUIT_TIME);
+				break;
+			case GES_BACKWARD_FLAG:		  
+				Serial.println("Backward");
+				myservo.write(0);
+				delay(GES_QUIT_TIME);
+				break;
+			case GES_CLOCKWISE_FLAG:
+				Serial.println("Clockwise");
+				for(pos = 0; pos <= 150; pos += 1) // goes from 0 degrees to 180 degrees 
+				{                                  // in steps of 1 degree 
+					myservo.write(pos);              // tell servo to go to position in variable 'pos' 
+					delay(20);                       // waits 15ms for the servo to reach the position 
+					paj7620ReadReg(0x43, 1, &data);
+					if(data == GES_FORWARD_FLAG) 
+					{
+						Serial.println("Forward");
+						break;
+					}
+				} 
+				for(pos = 150; pos>=0; pos-=1)     // goes from 180 degrees to 0 degrees 
+				{                                
+					myservo.write(pos);              // tell servo to go to position in variable 'pos' 
+					delay(20);                       // waits 15ms for the servo to reach the position 
+					if(data == GES_FORWARD_FLAG) 
+					{
+						Serial.println("Forward");
+						break;
+					}
+				} 
+				break;
+			case GES_COUNT_CLOCKWISE_FLAG:
+				Serial.println("anti-clockwise");
+				for(pos = 150; pos>=0; pos-=1)     // goes from 180 degrees to 0 degrees 
+				{                                
+					myservo.write(pos);              // tell servo to go to position in variable 'pos' 
+					delay(20);                       // waits 15ms for the servo to reach the position 
+					if(data == GES_FORWARD_FLAG) 
+					{
+						Serial.println("Forward");
+						break;
+					}
+				} 
+				for(pos = 0; pos <= 150; pos += 1) // goes from 0 degrees to 180 degrees 
+				{                                  // in steps of 1 degree 
+					myservo.write(pos);              // tell servo to go to position in variable 'pos' 
+					delay(20);                       // waits 15ms for the servo to reach the position 
+					if(data == GES_FORWARD_FLAG) 
+					{
+						Serial.println("Forward");
+						break;
+					}
+				} 
+				break;  
+			default:
+				myservo.write(pos);
+				delay(1000);
+				paj7620ReadReg(0x44, 1, &data1);
+				if (data1 == GES_WAVE_FLAG) 
+				{
+					Serial.println("wave");
+				}
+				break;
+		}
+	}
+	delay(100);
+}
+/*
+int freeRam () {
+    extern int __heap_start, *__brkval;
+    int v;
+    return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
+}
+*/
